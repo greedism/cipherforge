@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Enhanced Keyed Substitution + Permutation Cipher</title>
+<style>
+  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; max-width:900px; margin:24px auto; padding:12px; line-height:1.5; color:#111; transition:background-color 0.3s, color 0.3s; position:relative; }
+  textarea,input,button,select { font:inherit; font-size:14px; transition:background-color 0.3s, color 0.3s, border-color 0.3s; }
+  textarea { width:100%; min-height:80px; padding:8px; box-sizing:border-box; }
+  input { padding:8px; box-sizing:border-box; }
+  .row { display:flex; gap:12px; margin:8px 0; align-items:center; }
+  label { font-weight:600; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; background:#f7f7f8; padding:6px; border-radius:6px; }
+  .output { background:#fafafa; border:1px solid #eee; padding:10px; border-radius:8px; white-space:pre-wrap; word-break:break-word; }
+  .small { font-size:13px; color:#555; }
+  button { padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:white; cursor:pointer; }
+  button.primary { background:#0b74de; color:white; border-color:#0866b8; }
+  button.secondary { background:#10b981; color:white; border-color:#059669; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .note { font-size:13px; color:#444; background:#fbfbfe; border-left:4px solid #ddd; padding:8px; border-radius:6px; }
+  select { padding:6px 10px; border-radius:6px; border:1px solid #ddd; background:white; cursor:pointer; }
+  .theme-toggle { position:absolute; top:0; right:0; padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:white; cursor:pointer; font-size:20px; }
+  
+  body.dark { background:#1a1a1a; color:#e5e5e5; }
+  body.dark .mono { background:#2a2a2a; color:#e5e5e5; }
+  body.dark .output { background:#252525; border-color:#3a3a3a; color:#e5e5e5; }
+  body.dark .small { color:#aaa; }
+  body.dark button { background:#2a2a2a; border-color:#3a3a3a; color:#e5e5e5; }
+  body.dark button:hover { background:#333; }
+  body.dark .note { background:#252525; border-color:#3a3a3a; color:#ccc; }
+  body.dark select { background:#2a2a2a; border-color:#3a3a3a; color:#e5e5e5; }
+  body.dark input { background:#2a2a2a; border-color:#3a3a3a; color:#e5e5e5; }
+  body.dark textarea { background:#2a2a2a; border-color:#3a3a3a; color:#e5e5e5; }
+  body.dark .theme-toggle { background:#2a2a2a; border-color:#3a3a3a; }
+</style>
+</head>
+<body>
+  <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">🌙</button>
+  
+  <h1>Keyed Substitution + Permutation Cipher</h1>
+  <p class="small">Enhanced with PBKDF2 key derivation, multiple scrambling rounds, and cryptographically secure randomness.</p>
+
+  <div class="row">
+    <label for="key">Key</label>
+    <input id="key" class="mono" style="flex:1" placeholder="Type a key or generate one" />
+    <button id="genKey">Generate Key</button>
+  </div>
+
+  <div class="row">
+    <label for="rounds">Rounds:</label>
+    <select id="rounds">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3" selected>3</option>
+      <option value="5">5</option>
+      <option value="10">10</option>
+    </select>
+    <label for="iterations">Iterations:</label>
+    <select id="iterations">
+      <option value="10000">10,000</option>
+      <option value="50000">50,000</option>
+      <option value="100000" selected>100,000</option>
+      <option value="250000">250,000</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label for="plaintext">Plaintext</label>
+  </div>
+  <textarea id="plaintext" placeholder="Type plaintext here"></textarea>
+
+  <div class="row">
+    <button id="encrypt" class="primary">Encrypt → Ciphertext</button>
+    <button id="decrypt" class="secondary">Decrypt → Plaintext</button>
+    <button id="clear">Clear</button>
+  </div>
+
+  <h3>Ciphertext</h3>
+  <div id="ciphertext" class="output mono"></div>
+
+  <h3>Details</h3>
+  <div class="grid">
+    <div>
+      <strong>Key Fingerprint</strong>
+      <div id="fingerprint" class="output small mono">—</div>
+    </div>
+    <div>
+      <strong>Cipher Stats</strong>
+      <div id="stats" class="output small mono">—</div>
+    </div>
+  </div>
+
+  <p class="note">
+    Uses PBKDF2 for key derivation with configurable iterations. Multiple rounds of substitution and permutation provide enhanced security. Same key + settings always produce the same output.
+  </p>
+
+<script>
+(async () => {
+  async function deriveKey(password, salt, iterations = 100000) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(password),
+      'PBKDF2',
+      false,
+      ['deriveBits']
+    );
+    
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: enc.encode(salt),
+        iterations: iterations,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      512
+    );
+    
+    return new Uint8Array(bits);
+  }
+  
+  async function expandKey(derivedKey, context, length) {
+    const output = new Uint8Array(length);
+    let offset = 0;
+    let counter = 0;
+    
+    while (offset < length) {
+      const input = new Uint8Array(derivedKey.length + context.length + 4);
+      input.set(derivedKey);
+      input.set(new TextEncoder().encode(context), derivedKey.length);
+      input[input.length - 4] = (counter >>> 24) & 0xff;
+      input[input.length - 3] = (counter >>> 16) & 0xff;
+      input[input.length - 2] = (counter >>> 8) & 0xff;
+      input[input.length - 1] = counter & 0xff;
+      
+      const hash = await crypto.subtle.digest('SHA-256', input);
+      const hashBytes = new Uint8Array(hash);
+      const toCopy = Math.min(hashBytes.length, length - offset);
+      output.set(hashBytes.subarray(0, toCopy), offset);
+      offset += toCopy;
+      counter++;
+    }
+    
+    return output;
+  }
+  
+  function shuffleArray(arr, randomBytes) {
+    const result = arr.slice();
+    let byteOffset = 0;
+    
+    for (let i = result.length - 1; i > 0; i--) {
+      let randomValue = 0;
+      for (let b = 0; b < 4; b++) {
+        randomValue = (randomValue << 8) | randomBytes[(byteOffset + b) % randomBytes.length];
+      }
+      randomValue = randomValue >>> 0;
+      byteOffset = (byteOffset + 4) % randomBytes.length;
+      
+      const j = randomValue % (i + 1);
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    
+    return result;
+  }
+  
+  const CHARSET = (() => {
+    const chars = [];
+    for (let i = 32; i <= 126; i++) {
+      chars.push(String.fromCharCode(i));
+    }
+    return chars;
+  })();
+  
+  async function createSubstitutionMap(derivedKey, round) {
+    const randomBytes = await expandKey(derivedKey, `sub-${round}`, 1024);
+    const shuffled = shuffleArray(CHARSET, randomBytes);
+    
+    const forward = new Map();
+    const reverse = new Map();
+    
+    for (let i = 0; i < CHARSET.length; i++) {
+      forward.set(CHARSET[i], shuffled[i]);
+      reverse.set(shuffled[i], CHARSET[i]);
+    }
+    
+    return { forward, reverse };
+  }
+  
+  async function createPermutation(derivedKey, length, round) {
+    const indices = Array.from({ length }, (_, i) => i);
+    const randomBytes = await expandKey(derivedKey, `perm-${round}-${length}`, Math.max(512, length * 4));
+    return shuffleArray(indices, randomBytes);
+  }
+  
+  function applyPermutation(text, permutation) {
+    const result = new Array(text.length);
+    for (let i = 0; i < text.length; i++) {
+      result[i] = text[permutation[i]];
+    }
+    return result.join('');
+  }
+  
+  function reversePermutation(text, permutation) {
+    const result = new Array(text.length);
+    for (let i = 0; i < text.length; i++) {
+      result[permutation[i]] = text[i];
+    }
+    return result.join('');
+  }
+  
+  async function encrypt(plaintext, password, rounds = 3, iterations = 100000) {
+    if (!password) throw new Error('Password required');
+    if (!plaintext) return { ciphertext: '', stats: {} };
+    
+    const salt = 'cipher-v2-salt-' + plaintext.length;
+    const derivedKey = await deriveKey(password, salt, iterations);
+    
+    let text = plaintext;
+    
+    for (let round = 0; round < rounds; round++) {
+      const { forward } = await createSubstitutionMap(derivedKey, round);
+      text = Array.from(text).map(ch => forward.get(ch) || ch).join('');
+      
+      const permutation = await createPermutation(derivedKey, text.length, round);
+      text = applyPermutation(text, permutation);
+    }
+    
+    return {
+      ciphertext: text,
+      stats: {
+        length: text.length,
+        rounds: rounds,
+        iterations: iterations
+      }
+    };
+  }
+  
+  async function decrypt(ciphertext, password, rounds = 3, iterations = 100000) {
+    if (!password) throw new Error('Password required');
+    if (!ciphertext) return { plaintext: '', stats: {} };
+    
+    const salt = 'cipher-v2-salt-' + ciphertext.length;
+    const derivedKey = await deriveKey(password, salt, iterations);
+    
+    let text = ciphertext;
+    
+    for (let round = rounds - 1; round >= 0; round--) {
+      const permutation = await createPermutation(derivedKey, text.length, round);
+      text = reversePermutation(text, permutation);
+      
+      const { reverse } = await createSubstitutionMap(derivedKey, round);
+      text = Array.from(text).map(ch => reverse.get(ch) || ch).join('');
+    }
+    
+    return {
+      plaintext: text,
+      stats: {
+        length: text.length,
+        rounds: rounds,
+        iterations: iterations
+      }
+    };
+  }
+  
+  function generateRandomKey() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+  
+  async function getKeyFingerprint(password) {
+    if (!password) return '—';
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+    const bytes = new Uint8Array(hash);
+    return Array.from(bytes.slice(0, 8))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join(':');
+  }
+  
+  const keyInput = document.getElementById('key');
+  const genKeyBtn = document.getElementById('genKey');
+  const plaintextArea = document.getElementById('plaintext');
+  const ciphertextDiv = document.getElementById('ciphertext');
+  const encryptBtn = document.getElementById('encrypt');
+  const decryptBtn = document.getElementById('decrypt');
+  const clearBtn = document.getElementById('clear');
+  const roundsSelect = document.getElementById('rounds');
+  const iterationsSelect = document.getElementById('iterations');
+  const fingerprintDiv = document.getElementById('fingerprint');
+  const statsDiv = document.getElementById('stats');
+  const themeToggle = document.getElementById('themeToggle');
+  
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'dark') {
+    document.body.classList.add('dark');
+    themeToggle.textContent = '☀️';
+  }
+  
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    themeToggle.textContent = isDark ? '☀️' : '🌙';
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  });
+  
+  genKeyBtn.addEventListener('click', () => {
+    keyInput.value = generateRandomKey();
+    keyInput.focus();
+    updateKeyFingerprint();
+  });
+  
+  keyInput.addEventListener('input', updateKeyFingerprint);
+  
+  async function updateKeyFingerprint() {
+    const fp = await getKeyFingerprint(keyInput.value);
+    fingerprintDiv.textContent = fp;
+  }
+  
+  encryptBtn.addEventListener('click', async () => {
+    try {
+      const plaintext = plaintextArea.value;
+      const password = keyInput.value;
+      const rounds = parseInt(roundsSelect.value);
+      const iterations = parseInt(iterationsSelect.value);
+      
+      if (!plaintext) {
+        alert('Please enter plaintext');
+        return;
+      }
+      if (!password) {
+        alert('Please enter or generate a key');
+        return;
+      }
+      
+      encryptBtn.disabled = true;
+      encryptBtn.textContent = 'Encrypting...';
+      
+      const { ciphertext, stats } = await encrypt(plaintext, password, rounds, iterations);
+      
+      ciphertextDiv.textContent = ciphertext;
+      statsDiv.textContent = `Length: ${stats.length} | Rounds: ${stats.rounds} | Iterations: ${stats.iterations.toLocaleString()}`;
+      
+      encryptBtn.disabled = false;
+      encryptBtn.textContent = 'Encrypt → Ciphertext';
+    } catch (err) {
+      alert('Encryption error: ' + err.message);
+      encryptBtn.disabled = false;
+      encryptBtn.textContent = 'Encrypt → Ciphertext';
+    }
+  });
+  
+  decryptBtn.addEventListener('click', async () => {
+    try {
+      const ciphertext = ciphertextDiv.textContent.trim();
+      const password = keyInput.value;
+      const rounds = parseInt(roundsSelect.value);
+      const iterations = parseInt(iterationsSelect.value);
+      
+      if (!ciphertext) {
+        alert('No ciphertext to decrypt');
+        return;
+      }
+      if (!password) {
+        alert('Please enter the decryption key');
+        return;
+      }
+      
+      decryptBtn.disabled = true;
+      decryptBtn.textContent = 'Decrypting...';
+      
+      const { plaintext, stats } = await decrypt(ciphertext, password, rounds, iterations);
+      
+      plaintextArea.value = plaintext;
+      statsDiv.textContent = `Length: ${stats.length} | Rounds: ${stats.rounds} | Iterations: ${stats.iterations.toLocaleString()}`;
+      
+      decryptBtn.disabled = false;
+      decryptBtn.textContent = 'Decrypt → Plaintext';
+    } catch (err) {
+      alert('Decryption error: ' + err.message);
+      decryptBtn.disabled = false;
+      decryptBtn.textContent = 'Decrypt → Plaintext';
+    }
+  });
+  
+  clearBtn.addEventListener('click', () => {
+    plaintextArea.value = '';
+    ciphertextDiv.textContent = '';
+    statsDiv.textContent = '—';
+  });
+  
+  updateKeyFingerprint();
+})();
+</script>
+</body>
+</html>
