@@ -66,12 +66,12 @@ CipherForge uses a combination of cryptographic techniques:
 ## Installation
 
 ### Use Online
-Simply visit the [live demo](https://yourusername.github.io/cipherforge) - no installation needed.
+Simply visit the [live demo](https://greedism.github.io/cipherforge) - no installation needed.
 
 ### Run Locally
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cipherforge.git
+git clone https://github.com/greedism/cipherforge.git
 
 # Navigate to the directory
 cd cipherforge
