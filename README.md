@@ -18,7 +18,7 @@ A modern, client-side encryption tool featuring keyed substitution-permutation c
 
 ## Live Demo
 
-**[Try it now](https://yourusername.github.io/cipherforge)**
+**[Try it now](https://greedism.github.io/cipherforge)**
 
 ## How It Works
 
