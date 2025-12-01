@@ -18,9 +18,13 @@
   button.primary { background:#0b74de; color:white; border-color:#0866b8; }
   button.secondary { background:#10b981; color:white; border-color:#059669; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .note { font-size:13px; color:#444; background:#fbfbfe; border-left:4px solid #ddd; padding:8px; border-radius:6px; }
+  .note { font-size:13px; color:#444; background:#fbfbfe; border-left:4px solid #ddd; padding:8px; border-radius:6px; margin-bottom:60px; }
   select { padding:6px 10px; border-radius:6px; border:1px solid #ddd; background:white; cursor:pointer; }
   .theme-toggle { position:absolute; top:0; right:0; padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:white; cursor:pointer; font-size:20px; }
+  .credit { position:fixed; bottom:20px; right:20px; font-size:24px; cursor:default; transition:transform 0.3s; z-index:1000; }
+  .credit:hover { transform:scale(1.2); }
+  .credit-tooltip { display:none; position:absolute; bottom:100%; right:0; background:#333; color:white; padding:6px 10px; border-radius:6px; white-space:nowrap; font-size:13px; margin-bottom:8px; pointer-events:none; }
+  .credit:hover .credit-tooltip { display:block; }
   
   body.dark { background:#1a1a1a; color:#e5e5e5; }
   body.dark .mono { background:#2a2a2a; color:#e5e5e5; }
@@ -38,7 +42,7 @@
 <body>
   <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">🌙</button>
   
-  <h1>Keyed Substitution + Permutation Cipher</h1>
+  <h1>Cipher Forge Encryption Tool</h1>
   <p class="small">Enhanced with PBKDF2 key derivation, multiple scrambling rounds, and cryptographically secure randomness.</p>
 
   <div class="row">
@@ -77,7 +81,7 @@
   </div>
 
   <h3>Ciphertext</h3>
-  <div id="ciphertext" class="output mono"></div>
+  <textarea id="ciphertext" class="output mono" style="min-height:80px; width:100%; resize:vertical;" placeholder="Encrypted text will appear here, or paste ciphertext to decrypt"></textarea>
 
   <h3>Details</h3>
   <div class="grid">
@@ -94,6 +98,11 @@
   <p class="note">
     Uses PBKDF2 for key derivation with configurable iterations. Multiple rounds of substitution and permutation provide enhanced security. Same key + settings always produce the same output.
   </p>
+
+  <div class="credit">
+    <span class="credit-tooltip">made by greed</span>
+    ❤️
+  </div>
 
 <script>
 (async () => {
@@ -285,7 +294,7 @@
   const keyInput = document.getElementById('key');
   const genKeyBtn = document.getElementById('genKey');
   const plaintextArea = document.getElementById('plaintext');
-  const ciphertextDiv = document.getElementById('ciphertext');
+  const ciphertextArea = document.getElementById('ciphertext');
   const encryptBtn = document.getElementById('encrypt');
   const decryptBtn = document.getElementById('decrypt');
   const clearBtn = document.getElementById('clear');
@@ -342,7 +351,7 @@
       
       const { ciphertext, stats } = await encrypt(plaintext, password, rounds, iterations);
       
-      ciphertextDiv.textContent = ciphertext;
+      ciphertextArea.value = ciphertext;
       statsDiv.textContent = `Length: ${stats.length} | Rounds: ${stats.rounds} | Iterations: ${stats.iterations.toLocaleString()}`;
       
       encryptBtn.disabled = false;
@@ -356,13 +365,13 @@
   
   decryptBtn.addEventListener('click', async () => {
     try {
-      const ciphertext = ciphertextDiv.textContent.trim();
+      const ciphertext = ciphertextArea.value.trim();
       const password = keyInput.value;
       const rounds = parseInt(roundsSelect.value);
       const iterations = parseInt(iterationsSelect.value);
       
       if (!ciphertext) {
-        alert('No ciphertext to decrypt');
+        alert('No ciphertext to decrypt. Please paste encrypted text into the Ciphertext box first.');
         return;
       }
       if (!password) {
@@ -389,7 +398,7 @@
   
   clearBtn.addEventListener('click', () => {
     plaintextArea.value = '';
-    ciphertextDiv.textContent = '';
+    ciphertextArea.value = '';
     statsDiv.textContent = '—';
   });
   
